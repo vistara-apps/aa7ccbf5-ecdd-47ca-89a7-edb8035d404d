@@ -10,6 +10,7 @@ interface RecipeCardProps {
   onSave?: (recipeId: string) => void;
   onGenerate?: (recipeId: string) => void;
   isSaved?: boolean;
+  showSaveButton?: boolean;
 }
 
 export function RecipeCard({ 
@@ -17,7 +18,8 @@ export function RecipeCard({
   variant = 'compact', 
   onSave, 
   onGenerate,
-  isSaved = false 
+  isSaved = false,
+  showSaveButton = true
 }: RecipeCardProps) {
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -91,7 +93,7 @@ export function RecipeCard({
     <div className="recipe-card">
       <div className="flex justify-between items-start mb-4">
         <h3 className="font-bold text-xl text-white">{recipe.title}</h3>
-        {onSave && (
+        {onSave && showSaveButton && (
           <button
             onClick={handleSave}
             className={`p-2 rounded-full transition-colors duration-200 ${
