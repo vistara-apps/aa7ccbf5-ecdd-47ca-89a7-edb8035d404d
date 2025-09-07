@@ -3,10 +3,11 @@ import { getUser, updateUser, createUser } from '@/lib/supabase';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const user = await getUser(params.userId);
+    const { userId } = await params;
+    const user = await getUser(userId);
     
     if (!user) {
       return NextResponse.json(
@@ -27,11 +28,12 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const { userId } = await params;
     const updates = await request.json();
-    const user = await updateUser(params.userId, updates);
+    const user = await updateUser(userId, updates);
     
     if (!user) {
       return NextResponse.json(
@@ -52,13 +54,14 @@ export async function PUT(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const { userId } = await params;
     const userData = await request.json();
     const user = await createUser({
       ...userData,
-      user_id: params.userId,
+      user_id: userId,
     });
     
     if (!user) {

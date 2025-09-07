@@ -1,11 +1,20 @@
 import OpenAI from 'openai';
 import { GenerateRecipeRequest, Recipe } from './types';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY,
-  baseURL: "https://openrouter.ai/api/v1",
-  dangerouslyAllowBrowser: true,
-});
+// Initialize OpenAI client only when needed to avoid build-time errors
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('OpenAI API key is required. Please set OPENAI_API_KEY or OPENROUTER_API_KEY environment variable.');
+  }
+
+  return new OpenAI({
+    apiKey,
+    baseURL: "https://openrouter.ai/api/v1",
+    dangerouslyAllowBrowser: true,
+  });
+}
 
 export async function generateRecipe(request: GenerateRecipeRequest): Promise<Recipe> {
   const {
@@ -49,6 +58,7 @@ export async function generateRecipe(request: GenerateRecipeRequest): Promise<Re
   `;
 
   try {
+    const openai = getOpenAIClient();
     const completion = await openai.chat.completions.create({
       model: 'google/gemini-2.0-flash-001',
       messages: [

@@ -1,13 +1,28 @@
 import { createClient } from '@supabase/supabase-js';
 import { User, Recipe, Ingredient } from './types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Initialize Supabase client only when needed to avoid build-time errors
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('Supabase credentials not found. Database features will be disabled.');
+    return null;
+  }
+
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+export const supabase = getSupabaseClient();
 
 // User management
-export async function createUser(user: Omit<User, 'user_id'>): Promise<User | null> {
+export async function createUser(user: User): Promise<User | null> {
+  if (!supabase) {
+    console.warn('Supabase not initialized. Cannot create user.');
+    return null;
+  }
+
   try {
     const { data, error } = await supabase
       .from('users')
@@ -24,6 +39,11 @@ export async function createUser(user: Omit<User, 'user_id'>): Promise<User | nu
 }
 
 export async function getUser(userId: string): Promise<User | null> {
+  if (!supabase) {
+    console.warn('Supabase not initialized. Cannot get user.');
+    return null;
+  }
+
   try {
     const { data, error } = await supabase
       .from('users')
@@ -40,6 +60,11 @@ export async function getUser(userId: string): Promise<User | null> {
 }
 
 export async function updateUser(userId: string, updates: Partial<User>): Promise<User | null> {
+  if (!supabase) {
+    console.warn('Supabase not initialized. Cannot update user.');
+    return null;
+  }
+
   try {
     const { data, error } = await supabase
       .from('users')
@@ -58,6 +83,11 @@ export async function updateUser(userId: string, updates: Partial<User>): Promis
 
 // Recipe management
 export async function saveRecipe(recipe: Recipe): Promise<Recipe | null> {
+  if (!supabase) {
+    console.warn('Supabase not initialized. Cannot save recipe.');
+    return null;
+  }
+
   try {
     const { data, error } = await supabase
       .from('recipes')
@@ -74,6 +104,11 @@ export async function saveRecipe(recipe: Recipe): Promise<Recipe | null> {
 }
 
 export async function getUserRecipes(userId: string): Promise<Recipe[]> {
+  if (!supabase) {
+    console.warn('Supabase not initialized. Cannot get user recipes.');
+    return [];
+  }
+
   try {
     const { data, error } = await supabase
       .from('recipes')
@@ -89,6 +124,11 @@ export async function getUserRecipes(userId: string): Promise<Recipe[]> {
 }
 
 export async function addRecipeToUser(userId: string, recipeId: string): Promise<boolean> {
+  if (!supabase) {
+    console.warn('Supabase not initialized. Cannot add recipe to user.');
+    return false;
+  }
+
   try {
     // First get the current recipe
     const { data: recipe, error: fetchError } = await supabase
@@ -119,6 +159,11 @@ export async function addRecipeToUser(userId: string, recipeId: string): Promise
 
 // Ingredient management
 export async function saveIngredient(ingredient: Ingredient): Promise<Ingredient | null> {
+  if (!supabase) {
+    console.warn('Supabase not initialized. Cannot save ingredient.');
+    return null;
+  }
+
   try {
     const { data, error } = await supabase
       .from('ingredients')
@@ -135,6 +180,11 @@ export async function saveIngredient(ingredient: Ingredient): Promise<Ingredient
 }
 
 export async function getUserIngredients(userId: string): Promise<Ingredient[]> {
+  if (!supabase) {
+    console.warn('Supabase not initialized. Cannot get user ingredients.');
+    return [];
+  }
+
   try {
     const { data, error } = await supabase
       .from('ingredients')
@@ -150,6 +200,11 @@ export async function getUserIngredients(userId: string): Promise<Ingredient[]> 
 }
 
 export async function deleteIngredient(ingredientId: string): Promise<boolean> {
+  if (!supabase) {
+    console.warn('Supabase not initialized. Cannot delete ingredient.');
+    return false;
+  }
+
   try {
     const { error } = await supabase
       .from('ingredients')
@@ -166,6 +221,11 @@ export async function deleteIngredient(ingredientId: string): Promise<boolean> {
 
 // Database initialization (for development)
 export async function initializeDatabase() {
+  if (!supabase) {
+    console.warn('Supabase not initialized. Cannot initialize database.');
+    return;
+  }
+
   try {
     // Create users table
     await supabase.rpc('create_users_table');
