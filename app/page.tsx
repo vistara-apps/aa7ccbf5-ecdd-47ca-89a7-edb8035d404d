@@ -3,18 +3,30 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMiniKit } from '@coinbase/onchainkit/minikit';
 import { ConnectWallet, Wallet } from '@coinbase/onchainkit/wallet';
-import { Name } from '@coinbase/onchainkit/identity';
+import { Name, Address } from '@coinbase/onchainkit/identity';
+import { useAccount } from 'wagmi';
 import { ChatInput } from '@/components/ChatInput';
 import { ChatMessage } from '@/components/ChatMessage';
 import { IngredientList } from '@/components/IngredientList';
 import { UserSettings } from '@/components/UserSettings';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { PaymentModal } from '@/components/PaymentModal';
+import { SavedRecipes } from '@/components/SavedRecipes';
 import { generateRecipe } from '@/lib/openai';
 import { ChatMessage as ChatMessageType, User, Recipe } from '@/lib/types';
-import { Settings2, ChefHat, Sparkles } from 'lucide-react';
+import { 
+  canGenerateRecipe, 
+  updateFreeTierUsage, 
+  createSubscription,
+  FREE_TIER_DAILY_LIMIT,
+  type FreeTierUsage,
+  type Subscription 
+} from '@/lib/payments';
+import { Settings2, ChefHat, Sparkles, Heart, Crown } from 'lucide-react';
 
 export default function PantryChefApp() {
   const { setFrameReady } = useMiniKit();
+  const { address } = useAccount();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // State management
@@ -26,6 +38,7 @@ export default function PantryChefApp() {
   });
 
   const [ingredients, setIngredients] = useState<string[]>([]);
+  const [savedRecipesList, setSavedRecipesList] = useState<Recipe[]>([]);
   const [messages, setMessages] = useState<ChatMessageType[]>([
     {
       id: '1',
@@ -35,8 +48,20 @@ export default function PantryChefApp() {
     }
   ]);
 
+  // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isSavedRecipesOpen, setIsSavedRecipesOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Payment & Subscription State
+  const [freeTierUsage, setFreeTierUsage] = useState<FreeTierUsage>({
+    userId: 'demo_user',
+    recipesGenerated: 0,
+    lastResetDate: new Date(),
+    dailyLimit: FREE_TIER_DAILY_LIMIT,
+  });
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
 
   // Initialize MiniKit
   useEffect(() => {
@@ -147,13 +172,50 @@ Try saying "generate a recipe" or "make something Italian" to get started!`,
     });
   };
 
+  // Check if user can generate recipe (free tier or subscription)
+  const checkRecipeGeneration = (): boolean => {
+    return canGenerateRecipe(freeTierUsage, subscription || undefined);
+  };
+
+  // Handle payment success
+  const handlePaymentSuccess = (transactionHash: string, type: string) => {
+    if (type === 'recipe') {
+      // Single recipe payment - proceed with generation
+      generateRecipeFromChat('generate recipe', true);
+    } else {
+      // Subscription payment - create subscription
+      const newSubscription = createSubscription(
+        user.user_id,
+        type as 'daily' | 'weekly',
+        transactionHash
+      );
+      setSubscription(newSubscription);
+      
+      addMessage({
+        type: 'info',
+        content: `🎉 ${type === 'daily' ? 'Daily' : 'Weekly'} subscription activated! You now have unlimited recipe generation. Transaction: ${transactionHash.slice(0, 10)}...`,
+      });
+    }
+  };
+
   // Generate recipe from chat
-  const generateRecipeFromChat = async (userMessage: string) => {
+  const generateRecipeFromChat = async (userMessage: string, skipPaymentCheck = false) => {
     if (ingredients.length === 0) {
       addMessage({
         type: 'bot',
         content: "Please add some ingredients to your pantry first! Use the + button to add ingredients.",
       });
+      return;
+    }
+
+    // Check if user can generate recipe (unless payment was just made)
+    if (!skipPaymentCheck && !checkRecipeGeneration()) {
+      const remaining = freeTierUsage.dailyLimit - freeTierUsage.recipesGenerated;
+      addMessage({
+        type: 'bot',
+        content: `You've used all ${freeTierUsage.dailyLimit} free recipes for today! Choose a payment option to continue generating recipes.`,
+      });
+      setIsPaymentModalOpen(true);
       return;
     }
 
@@ -191,6 +253,11 @@ Try saying "generate a recipe" or "make something Italian" to get started!`,
         meal_type,
       });
 
+      // Update free tier usage if not on subscription
+      if (!subscription || !subscription.isActive) {
+        setFreeTierUsage(updateFreeTierUsage(freeTierUsage));
+      }
+
       addMessage({
         type: 'bot',
         content: `🎉 I've created a delicious recipe for you! Here's "${recipe.title}" using your available ingredients:`,
@@ -210,17 +277,40 @@ Try saying "generate a recipe" or "make something Italian" to get started!`,
 
   // Save recipe
   const handleSaveRecipe = (recipeId: string) => {
+    // Find the recipe in messages
+    const recipeMessage = messages.find(msg => msg.recipe?.recipe_id === recipeId);
+    if (!recipeMessage?.recipe) return;
+
     if (!user.saved_recipes.includes(recipeId)) {
+      // Add to user's saved recipes list
       setUser({
         ...user,
         saved_recipes: [...user.saved_recipes, recipeId],
       });
+      
+      // Add to saved recipes list for the modal
+      setSavedRecipesList(prev => [...prev, recipeMessage.recipe!]);
       
       addMessage({
         type: 'info',
         content: "Recipe saved to your collection! ❤️",
       });
     }
+  };
+
+  // Remove recipe from saved list
+  const handleRemoveRecipe = (recipeId: string) => {
+    setUser({
+      ...user,
+      saved_recipes: user.saved_recipes.filter(id => id !== recipeId),
+    });
+    
+    setSavedRecipesList(prev => prev.filter(recipe => recipe.recipe_id !== recipeId));
+    
+    addMessage({
+      type: 'info',
+      content: "Recipe removed from your collection",
+    });
   };
 
   // Update user settings
@@ -243,11 +333,45 @@ Try saying "generate a recipe" or "make something Italian" to get started!`,
             </div>
             <div>
               <h1 className="text-xl font-bold text-white">PantryChef AI</h1>
-              <p className="text-sm text-gray-300">Your Personal AI Chef</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-gray-300">Your Personal AI Chef</p>
+                {subscription && subscription.isActive && (
+                  <div className="flex items-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 px-2 py-0.5 rounded-full">
+                    <Crown size={12} className="text-white" />
+                    <span className="text-xs text-white font-medium">
+                      {subscription.type === 'daily' ? 'Daily' : 'Weekly'} Pro
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           
           <div className="flex items-center gap-2">
+            {/* Free Recipes Counter */}
+            {(!subscription || !subscription.isActive) && (
+              <div className="text-center px-2">
+                <div className="text-xs text-gray-400">Free Recipes</div>
+                <div className="text-sm font-bold text-accent">
+                  {Math.max(0, freeTierUsage.dailyLimit - freeTierUsage.recipesGenerated)}/{freeTierUsage.dailyLimit}
+                </div>
+              </div>
+            )}
+
+            {/* Saved Recipes Button */}
+            <button
+              onClick={() => setIsSavedRecipesOpen(true)}
+              className="p-2 glass-card rounded-lg hover:bg-opacity-15 transition-all duration-200 relative"
+            >
+              <Heart size={20} className="text-white" />
+              {savedRecipesList.length > 0 && (
+                <div className="absolute -top-1 -right-1 bg-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {savedRecipesList.length}
+                </div>
+              )}
+            </button>
+
+            {/* Settings Button */}
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="p-2 glass-card rounded-lg hover:bg-opacity-15 transition-all duration-200"
@@ -255,6 +379,7 @@ Try saying "generate a recipe" or "make something Italian" to get started!`,
               <Settings2 size={20} className="text-white" />
             </button>
             
+            {/* Wallet Connection */}
             <Wallet>
               <ConnectWallet>
                 <Name />
@@ -309,6 +434,23 @@ Try saying "generate a recipe" or "make something Italian" to get started!`,
         onUpdateUser={handleUpdateUser}
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        onPaymentSuccess={handlePaymentSuccess}
+        userAddress={address}
+        recipesRemaining={Math.max(0, freeTierUsage.dailyLimit - freeTierUsage.recipesGenerated)}
+      />
+
+      {/* Saved Recipes Modal */}
+      <SavedRecipes
+        isOpen={isSavedRecipesOpen}
+        onClose={() => setIsSavedRecipesOpen(false)}
+        savedRecipes={savedRecipesList}
+        onRemoveRecipe={handleRemoveRecipe}
       />
     </div>
   );
