@@ -1,0 +1,30 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "frame": {
+    "version": "1",
+    "name": "PantryChef AI",
+    "subtitle": "Built with Zara",
+    "description": "PantryChef AI is a Base Mini App built with Zara.",
+    "iconUrl": "https://0co.to/images/zara-2.png",
+    "homeUrl": "https://aa7ccbf5ecdd47ca89a7edb8035d404d-igkf.vercel.app",
+    "splashImageUrl": "https://aa7ccbf5ecdd47ca89a7edb8035d404d-igkf.vercel.app/splash.png",
+    "splashBackgroundColor": "#000000",
+    "heroImageUrl": "https://aa7ccbf5ecdd47ca89a7edb8035d404d-igkf.vercel.app/image.png",
+    "tagline": "PantryChef AI",
+    "screenshotUrls": [
+      "https://aa7ccbf5ecdd47ca89a7edb8035d404d-igkf.vercel.app/screenshot.png",
+      "https://aa7ccbf5ecdd47ca89a7edb8035d404d-igkf.vercel.app/screenshot.png"
+    ],
+    "primaryCategory": "social",
+    "tags": [
+      "base",
+      "miniapp",
+      "onchainkit"
+    ],
+    "webhookUrl": "https://aa7ccbf5ecdd47ca89a7edb8035d404d-igkf.vercel.app/api/webhook"
+  }
+}
